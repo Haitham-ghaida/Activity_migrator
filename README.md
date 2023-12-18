@@ -54,6 +54,11 @@ result = migrator.migrate_activity(
 - [ ] More extensive testing.
 - [ ] Ability to create activities in a new or existing database that is not the background database (ecoinvent).
 
+I'm only using it for a specific use case, and I only have a little time to do other things, but please let me know if you have suggestions. Or if you think something is sloppy.
+
+## Author
+
+Haitham Ghaida - haitham.ghaida@protonmail.com
 
 ## Contributing
 
