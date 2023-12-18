@@ -50,6 +50,11 @@ result = migrator.migrate_activity(
 - `create_if_not_found=True` will create the activity in the new database if it's not found.
 - Set `by_key=True` to search by activity key instead of code.
 
+## TODO
+- [ ] More extensive testing.
+- [ ] Ability to create activities in a new or existing database that is not the background database (ecoinvent).
+
+
 ## Contributing
 
 Contributions to the ActivityProjectMigrator are welcome! Please submit your pull requests or issues through the GitHub repository.
