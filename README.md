@@ -11,6 +11,7 @@ Features
 - Flexible searching: Allows migration by either activity code or key.
 - Biosphere handling: Special handling for migrating biosphere activities.
 
+
 NOTES: 
 - Still a work in progress. You should expect some errors at this stage.
 - Tested only with bw2data version (4, 0, 'DEV33').
@@ -49,6 +50,16 @@ result = migrator.migrate_activity(
 ```
 - `create_if_not_found=True` will create the activity in the new database if it's not found.
 - Set `by_key=True` to search by activity key instead of code.
+
+### Saving your database
+
+Automatically created activities have an attribute called auto_generated, so if you would like to undo or delete all these activities, simply do the following:
+```python
+db = bd.Database('new_database')
+for a in db:
+    if a.get('auto_generated'):
+        a.delete()
+```
 
 ## TODO
 - [ ] More extensive testing.
