@@ -11,10 +11,13 @@ Features
 - Flexible searching: Allows migration by either activity code or key.
 - Biosphere handling: Special handling for migrating biosphere activities.
 
-NOTES: Still a work in progress. Expect some errors. Tested only with bw2data version (4, 0, 'DEV33')
+NOTES: 
+- Still a work in progress. You should expect some errors at this stage.
+- Tested only with bw2data version (4, 0, 'DEV33').
+- fuzzy matching is used for some biosphere exchanges with slightly different names. I would need to look into this more. In my case I had Particulates> 10 um. This is renamed to Particulate matter, > 10 um in the new biosphere database for some reason. I did not test it with other flows that might be named drastically differently which would mean that the fuzzy finder will not be able to find the equivalent flow.
 ## Installation
 
-To use ActivityProjectMigrator, ensure you have Python installed along with the bw2data and fuzzywuzzy packages. You can install these packages using pip:
+To use ActivityProjectMigrator, please ensure you have Python installed along with the bw2data and fuzzywuzzy packages. You can install these packages using pip:
 
 ```bash
 pip install bw2data fuzzywuzzy
