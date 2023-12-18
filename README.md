@@ -1,4 +1,3 @@
-# ActivityProjectMigrator
 ## Overview
 
 
