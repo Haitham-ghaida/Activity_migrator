@@ -1,15 +1,17 @@
 # ActivityProjectMigrator
 ## Overview
 
+
 The ActivityProjectMigrator is a Python module designed for migrating activities between projects and different versions of the ecoinvent database in the Brightway framework. This tool is particularly useful when transitioning projects from older versions of ecoinvent to newer ones. It automates the process of finding equivalent activities in the new database and handles the creation of activities and their exchanges if they do not exist in the target database.
 Features
 
 - Migration between databases: Facilitates the migration of activities from one database to another, especially between different ecoinvent versions.
-- Creation of missing activities: Automatically creates activities in the new database if they are not found.
+- Creation of missing activities: Automatically create activities in the new database if they are not found.
 - Performance optimization: Caches results of migration attempts to enhance performance.
 - Flexible searching: Allows migration by either activity code or key.
 - Biosphere handling: Special handling for migrating biosphere activities.
 
+NOTES: Still a work in progress. Expect some errors. Tested only with bw2data version (4, 0, 'DEV33')
 ## Installation
 
 To use ActivityProjectMigrator, ensure you have Python installed along with the bw2data and fuzzywuzzy packages. You can install these packages using pip:
