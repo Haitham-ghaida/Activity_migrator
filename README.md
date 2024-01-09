@@ -1,7 +1,7 @@
 ## Overview
 
 
-The ActivityProjectMigrator is a Python module designed for migrating activities between projects and different versions of the ecoinvent database in the Brightway framework. This tool is particularly useful when transitioning projects from older versions of ecoinvent to newer ones. It automates the process of finding equivalent activities in the new database and handles the creation of activities and their exchanges if they do not exist in the target database.
+The ActivityMigrator is a Python module designed for migrating activities between projects and different versions of the ecoinvent database in the Brightway framework. This tool is particularly useful when transitioning projects from older versions of ecoinvent to newer ones. It automates the process of finding equivalent activities in the new database and handles the creation of activities and their exchanges if they do not exist in the target database.
 Features
 
 - Migration between databases: Facilitates the migration of activities from one database to another, especially between different ecoinvent versions.
