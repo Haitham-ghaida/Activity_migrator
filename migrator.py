@@ -1,7 +1,9 @@
 import uuid
 import bw2data as bd
+import numpy as np
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
+from functools import lru_cache
 
 
 class ActivityProjectMigrator:
@@ -42,6 +44,9 @@ class ActivityProjectMigrator:
         return_key_only: bool = True,
         by_key: bool = False,
         biosphere_name: str = "biosphere3",
+        verbose: bool = False,
+        fuzzy_match: bool = True,
+        fuzzy_match_score: int = 85,
     ) -> tuple:
         """
         Migrates an activity from an one project to another. and between different versions of the ecoinvent database.
@@ -86,6 +91,8 @@ class ActivityProjectMigrator:
             ) from e
 
         # Prepare activity details for comparison
+        if verbose:
+            print(f"Extracting Activity details: {activity}")
         activity_details = self._extract_activity_details(activity)
 
         # Switch to the new project and database
@@ -105,17 +112,54 @@ class ActivityProjectMigrator:
                 else:
                     result = (new_activity, True)
                 self.cache[old_activity_code] = result
+                if verbose:
+                    print(
+                        f"Found equivalent activity: {new_activity} to query: {activity_details}"
+                    )
                 return result
 
+        # If no match try to fuzzy match with a high accuracy
+        # The reason for this, is as always weirdness in the ecoinvent database
+        # for example: there was an activity in the old database with the name iron (III) chloride production, product in 40% solution state
+        # now it's iron(III) chloride production, product in 40% solution state
+        # the only difference is the space between iron and the parenthesis
+        if fuzzy_match:
+            if verbose:
+                print(
+                    f"No exact match found, trying to fuzzy match with a high accuracy: {activity_details}"
+                )
+            query = f"{activity_details['name']} {activity_details['location']} {activity_details['reference product']}"
+            fuzzy_new_activity = self._find_closest_match(
+                query, new_db, score_cutoff=fuzzy_match_score, biosphere=False
+            )
+            print("#" * 50)
+            print(fuzzy_new_activity)
+            if fuzzy_new_activity:
+                if verbose:
+                    print(f"Fuzzy match found: {fuzzy_new_activity} ")
+                if len(fuzzy_new_activity) == 1:
+                    fuzzy_new_activity = fuzzy_new_activity[0]
+                    return (fuzzy_new_activity.key, True)
+                elif len(fuzzy_new_activity) > 1:
+                    fuzzy_new_activity = fuzzy_new_activity[0]
+                    print(
+                        f"Multiple matches found for query: {query}, returning the first match: {fuzzy_new_activity}"
+                    )
+                    return (fuzzy_new_activity.key, True)
         # If no matching activity is found, create one if specified
         if create_if_not_found:
-            return self.create_activity_if_not_found(old_activity_code)
+            if verbose:
+                print(f"Activity not found, Creating activity: {activity_details}")
+            return self.create_activity_if_not_found(old_activity_code, verbose=verbose)
         result = (activity, False)
         self.cache[old_activity_code] = result
         return result
 
     def _handle_biosphere_migration(
-        self, activity_details, biosphere_name: str = "biosphere3"
+        self,
+        activity_details,
+        biosphere_name: str = "biosphere3",
+        verbose: bool = False,
     ):
         """
         Internal method.
@@ -132,9 +176,12 @@ class ActivityProjectMigrator:
             - (activity_key, True) if the activity was created or found.
             - (activity_key, False) if the activity was not found.
         """
+
         # Switch to the new project and database
         bd.projects.set_current(self.new_project_name)
         new_biosphere = bd.Database(biosphere_name)
+        print("#" * 50)
+        print(new_biosphere)
         new_act = [
             act
             for act in new_biosphere
@@ -142,23 +189,36 @@ class ActivityProjectMigrator:
                 act.get(key) == value
                 for key, value in activity_details.items()
                 if value is not None
+                and key != "input"  # Add condition to ignore 'input' key
+                and key != "amount"  # Add condition to ignore 'amount' key
+                and key != "type"  # Add condition to ignore 'categories' key
             )
         ]
-        if len(new_act) == 1:
+        print(new_act)
+        print("#" * 50)
+        print(activity_details)
+        if len(new_act) >= 1:
             new_act = new_act[0]
+            if verbose:
+                print(f"Found equivalent biosphere activity: {new_act}")
+            return (new_act.key, True)
+
         else:
             # try to find a close match
             query = f"{activity_details['name']} {activity_details['categories']}"
             new_act = self._find_closest_match(query, new_biosphere)
+            if verbose:
+                print(f"Closest match: {new_act} to query: {query}")
             if new_act is None:
                 raise ValueError(
                     f"Activity '{activity_details['name']}' not found in the new database '{self.new_db_name}'"
                 )
             else:
                 new_act = new_act[0]
-        return (new_act.key, True)
+                return (new_act.key, True)
 
-    def _find_closest_match(self, query, database, score_cutoff=70):
+    @lru_cache(maxsize=128)
+    def _find_closest_match(self, query, database, score_cutoff=70, biosphere=True):
         """
         Internal method.
         Finds the closest match to a query in a database using fuzzy matching.
@@ -175,10 +235,20 @@ class ActivityProjectMigrator:
         -------
         - list: A list of matching entries.
         """
+
         # Pair each transformed entry with its original database entry
-        choices = [
-            (f"{entry['name']} {entry['categories']}", entry) for entry in database
-        ]
+        if biosphere:
+            choices = [
+                (f"{entry['name']} {entry['categories']}", entry) for entry in database
+            ]
+        else:
+            choices = [
+                (
+                    f"{entry['name']} {entry['location']} {entry['reference product']}",
+                    entry,
+                )
+                for entry in database
+            ]
 
         # Perform fuzzy matching using the transformed strings
         high_score_matches = process.extract(
@@ -196,11 +266,10 @@ class ActivityProjectMigrator:
             for transformed, original in choices
             if transformed == match
         ]
-
         return filtered_matches if filtered_matches else None
 
     def create_activity_if_not_found(
-        self, old_activity_code: str, by_key: bool = False
+        self, old_activity_code: str, by_key: bool = False, verbose: bool = False
     ) -> tuple:
         """
         Creates a new activity in the new database if it doesn't exist.
@@ -246,7 +315,7 @@ class ActivityProjectMigrator:
         new_act.save()
 
         # Handle exchanges for the new activity
-        self._handle_exchanges(new_act, exchange_details_list)
+        self._handle_exchanges(new_act, exchange_details_list, verbose=verbose)
 
         return (new_act.key, True)
 
@@ -302,13 +371,13 @@ class ActivityProjectMigrator:
                 "input": exc.input.key,
                 "amount": exc.amount,
                 "unit": exc.unit,
-                "uncertainty_type": exc.uncertainty_type,
                 "type": exc["type"],
-                "loc": exc.get("loc"),
-                "scale": exc.get("scale"),
-                "negative": exc.get("negative"),
-                "minimum": exc.get("minimum"),
-                "maximum": exc.get("maximum"),
+                # "uncertainty type": exc.uncertainty.get("uncertainty type"),
+                # "loc": exc.get("loc", np.nan),
+                # "scale": exc.get("scale", np.nan),
+                # "negative": exc.get("negative", np.nan),
+                # "minimum": exc.get("minimum", np.nan),
+                # "maximum": exc.get("maximum", np.nan),
             }
             # So why do this and not put the name and the categories in the exchange details?
             # Because for some reason sometimes it does not let me access them from the exchange object
@@ -329,6 +398,7 @@ class ActivityProjectMigrator:
         self,
         new_act: bd.Node,
         exchange_details_list: list[dict],
+        verbose: bool = False,
     ) -> None:
         """
         Internal method.
@@ -343,25 +413,57 @@ class ActivityProjectMigrator:
         -------
         - None
         """
+        # create a cache for activities that have been created and their exchange details
+        # this is to avoid creating the same activity multiple times
+        # cache = {}
+
+        # add new act and its exchange details to the cache
+        # cache[new_act.key] = exchange_details_list
+
+        # if the activity and its exchange details are in the cache, then skip it
+        # if new_act.key in cache and exchange_details_list in cache.values():
+        #     if verbose:
+        #         print(f"Activity: {new_act.key} and its exchange details are in the cache, skipping")
+        #     return
+        new_act.new_exchange(
+            input=new_act, amount=1, type="production", unit=new_act["unit"]
+        ).save()
+
         for exchange_details in exchange_details_list:
+            if verbose:
+                print(f"Handling exchange: {exchange_details}")
             if exchange_details["type"] == "biosphere":
-                migrated_input = self._handle_biosphere_migration(exchange_details)
+                if verbose:
+                    print("Handling biosphere exchange")
+                migrated_input = self._handle_biosphere_migration(
+                    exchange_details, verbose=verbose
+                )
             elif exchange_details["type"] == "production":
+                if verbose:
+                    print("Skipping production exchange")
                 continue  # Skip production exchanges
             else:
                 # Migrate the activity of each exchange
                 migrated_input = self.migrate_activity(
                     exchange_details["input"], return_code_only=False, by_key=True
                 )
+
                 exchange_details["input"] = migrated_input[0]
+                if verbose:
+                    print("Handling technosphere exchange")
+                    print(f"Migrated input: {migrated_input}")
             # if the exchange is not found in the new database
             if not migrated_input[1]:
                 # create the activity of the exchange in the new database if it doesn't exist
                 nested_technosphere_exchange = self.create_activity_if_not_found(
-                    exchange_details["input"], by_key=True
+                    exchange_details["input"], by_key=True, verbose=verbose
                 )
                 # grab the key of the newly created activity
                 exchange_details["input"] = nested_technosphere_exchange[0]
+                if verbose:
+                    print(
+                        f"The activity the exchanged is pointing at was not found, Created the activity: {nested_technosphere_exchange}"
+                    )
 
-            # Add the exchange to the new activity
+            # Add the exchanges to the new activity
             new_act.new_exchange(**exchange_details).save()
